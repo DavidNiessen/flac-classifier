@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "dev.niessen"
-version = "1.0.0-SNAPSHOT"
+version = System.getenv("RELEASE_VERSION") ?: "1.0.0-SNAPSHOT"
 
 kotlin {
     jvmToolchain(17)

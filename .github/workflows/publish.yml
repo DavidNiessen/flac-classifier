@@ -2,7 +2,7 @@ name: Publish to GitHub Packages
 
 on:
   push:
-    branches: [ main ]
+    tags: [ 'v*' ]
 
 permissions:
   contents: read
@@ -23,6 +23,8 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
 
       - name: Publish to GitHub Packages
         run: ./gradlew publish
@@ -30,3 +32,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_VERSION: ${{ github.ref_name }}
