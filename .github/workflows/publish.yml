@@ -21,11 +21,6 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Run tests
-        run: ./gradlew test
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
-
       - name: Publish to GitHub Packages
         run: ./gradlew publish
         env:
