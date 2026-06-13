@@ -1,5 +1,5 @@
 build/
 .gradle/
 .idea/
-*.jar
+build/**/*.jar
 local.properties
