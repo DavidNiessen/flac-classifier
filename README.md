@@ -157,6 +157,13 @@ src/main/kotlin/dev/niessen/flacclassifier/
     └── AnalysisResult.kt    Output data class
 ```
 
-## Publishing
+## Releasing
 
-The GitHub Actions workflow (`.github/workflows/publish.yml`) publishes a fresh `1.0.0-SNAPSHOT` to GitHub Packages on every push to `main`. See [docs/library-api.md](docs/library-api.md) for how to consume it.
+Push a `v*` tag to cut a release. The tag name becomes the published version.
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+The `.github/workflows/publish.yml` pipeline runs tests first; if they pass it publishes `dev.niessen:flac-classifier:<version>` to GitHub Packages. See [docs/library-api.md](docs/library-api.md) for how to consume it.
