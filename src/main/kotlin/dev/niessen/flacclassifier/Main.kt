@@ -39,7 +39,7 @@ class FlacClassifierCommand : Callable<Int> {
         }
 
         val result = try {
-            FlacClassifier.analyze(inputFile)
+            FlacClassifier.analyze(inputFile, ClassifierConfig.load())
         } catch (e: Exception) {
             System.err.println("Error decoding FLAC: ${e.message}")
             return 2

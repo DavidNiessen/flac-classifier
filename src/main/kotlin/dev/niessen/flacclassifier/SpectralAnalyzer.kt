@@ -13,17 +13,13 @@ data class SpectralReport(
 object SpectralAnalyzer {
     private const val FFT_SIZE = 4096
     private const val HOP_SIZE = FFT_SIZE / 2
-    private const val CUTOFF_THRESHOLD_DB = -60.0f
-    private const val SLOPE_BRICK_WALL_DB = -40.0f
-    private const val SLOPE_GRADUAL_DB = -15.0f
-    private const val ABOVE_22K_RATIO_THRESHOLD = 0.001f
     private const val SLOPE_WINDOW_BINS = 10
 
     private val hannWindow: FloatArray = FloatArray(FFT_SIZE) { i ->
         0.5f * (1f - cos(2f * PI.toFloat() * i / (FFT_SIZE - 1)))
     }
 
-    fun analyze(samples: FloatArray, sampleRate: Int): SpectralReport {
+    fun analyze(samples: FloatArray, sampleRate: Int, config: ClassifierConfig = ClassifierConfig.loaded): SpectralReport {
         val numBins = FFT_SIZE / 2 + 1
         val accPower = FloatArray(numBins)
         var frameCount = 0
@@ -58,14 +54,14 @@ object SpectralAnalyzer {
         }
         val smoothed = rollingMedian(powerDb, radius = 5)
 
-        val cutoffBin = findCutoffBin(smoothed)
+        val cutoffBin = findCutoffBin(smoothed, config.cutoffThresholdDb)
         val cutoffHz = if (cutoffBin >= 0) binToHz(cutoffBin, sampleRate) else null
         val rolloffShape = if (cutoffBin > SLOPE_WINDOW_BINS && cutoffBin < numBins - SLOPE_WINDOW_BINS) {
-            classifyRolloff(powerDb, cutoffBin, numBins)
+            classifyRolloff(powerDb, cutoffBin, numBins, config)
         } else RolloffShape.UNKNOWN
 
         val hasContentAbove22kHz = if (sampleRate > 44100) {
-            checkAbove22kHz(avgPower, sampleRate, numBins)
+            checkAbove22kHz(avgPower, sampleRate, numBins, config.above22kRatioThreshold)
         } else null
 
         return SpectralReport(cutoffHz, rolloffShape, hasContentAbove22kHz)
@@ -83,14 +79,14 @@ object SpectralAnalyzer {
     private fun hzToBin(hz: Double, sampleRate: Int): Int =
         (hz * FFT_SIZE / sampleRate).roundToInt()
 
-    private fun findCutoffBin(smoothedDb: FloatArray): Int {
+    private fun findCutoffBin(smoothedDb: FloatArray, cutoffThresholdDb: Float): Int {
         for (k in smoothedDb.indices.reversed()) {
-            if (smoothedDb[k] > CUTOFF_THRESHOLD_DB) return k
+            if (smoothedDb[k] > cutoffThresholdDb) return k
         }
         return -1
     }
 
-    private fun classifyRolloff(powerDb: FloatArray, cutoffBin: Int, numBins: Int): RolloffShape {
+    private fun classifyRolloff(powerDb: FloatArray, cutoffBin: Int, numBins: Int, config: ClassifierConfig): RolloffShape {
         val belowStart = maxOf(0, cutoffBin - SLOPE_WINDOW_BINS)
         val aboveEnd = minOf(numBins - 1, cutoffBin + SLOPE_WINDOW_BINS)
 
@@ -99,13 +95,13 @@ object SpectralAnalyzer {
         val slope = aboveDb - belowDb
 
         return when {
-            slope < SLOPE_BRICK_WALL_DB -> RolloffShape.BRICK_WALL
-            slope < SLOPE_GRADUAL_DB -> RolloffShape.GRADUAL
+            slope < config.slopeBrickWallDb -> RolloffShape.BRICK_WALL
+            slope < config.slopeGradualDb -> RolloffShape.GRADUAL
             else -> RolloffShape.PSYCHOACOUSTIC
         }
     }
 
-    private fun checkAbove22kHz(avgPower: FloatArray, sampleRate: Int, numBins: Int): Boolean {
+    private fun checkAbove22kHz(avgPower: FloatArray, sampleRate: Int, numBins: Int, above22kRatioThreshold: Float): Boolean {
         val bin22k = hzToBin(22050.0, sampleRate).coerceIn(0, numBins - 1)
         if (bin22k >= numBins - 1) return false
 
@@ -114,11 +110,11 @@ object SpectralAnalyzer {
 
         val abovePower = avgPower.slice(bin22k until numBins).average().toFloat()
         // Compare above-22kHz band against the overall peak: genuine HF content sits within ~30 dB of the peak
-        return (abovePower / peakPower) > ABOVE_22K_RATIO_THRESHOLD
+        return (abovePower / peakPower) > above22kRatioThreshold
     }
 
-    fun analyzeMultiChannel(channels: List<FloatArray>, sampleRate: Int): SpectralReport {
-        val reports = channels.map { analyze(it, sampleRate) }
+    fun analyzeMultiChannel(channels: List<FloatArray>, sampleRate: Int, config: ClassifierConfig = ClassifierConfig.loaded): SpectralReport {
+        val reports = channels.map { analyze(it, sampleRate, config) }
         // Take the most conservative channel (lowest cutoff)
         return reports.minByOrNull { it.cutoffHz ?: Double.MAX_VALUE } ?: reports.first()
     }

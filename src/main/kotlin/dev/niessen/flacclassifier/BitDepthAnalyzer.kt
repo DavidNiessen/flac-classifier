@@ -11,16 +11,18 @@ data class BitDepthReport(
 )
 
 object BitDepthAnalyzer {
-    private const val MAX_SAMPLE_COUNT = 500_000
-    private const val ZERO_PADDING_THRESHOLD = 0.99
-    private const val LSB_ENTROPY_THRESHOLD = 4.0
     private const val SILENCE_THRESHOLD = 0.001f  // ~-60 dBFS
 
-    fun analyze(samplesInt: IntArray, samplesFloat: FloatArray, declaredBitDepth: Int): BitDepthReport {
-        val stride = max(1, samplesInt.size / MAX_SAMPLE_COUNT)
+    fun analyze(
+        samplesInt: IntArray,
+        samplesFloat: FloatArray,
+        declaredBitDepth: Int,
+        config: ClassifierConfig = ClassifierConfig.loaded
+    ): BitDepthReport {
+        val stride = max(1, samplesInt.size / config.maxSampleCount)
         val subset = mutableListOf<Int>()
         var i = 0
-        while (i < samplesInt.size && subset.size < MAX_SAMPLE_COUNT) {
+        while (i < samplesInt.size && subset.size < config.maxSampleCount) {
             // Skip silent frames
             if (kotlin.math.abs(samplesFloat[i]) > SILENCE_THRESHOLD) {
                 subset.add(samplesInt[i])
@@ -36,7 +38,7 @@ object BitDepthAnalyzer {
         if (declaredBitDepth == 24) {
             val nonZeroLowByte = subset.count { (it and 0xFF) != 0 }
             val zeroPaddingRatio = 1.0 - nonZeroLowByte.toDouble() / subset.size
-            if (zeroPaddingRatio > ZERO_PADDING_THRESHOLD) {
+            if (zeroPaddingRatio > config.zeroPaddingThreshold) {
                 return BitDepthReport(declaredBitDepth, 16, 0.0, true)
             }
         }

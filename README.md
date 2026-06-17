@@ -129,6 +129,46 @@ println(result.spectralCutoffHz)     // e.g. 16021.0
 println(result.confidenceNotes)      // human-readable reasoning
 ```
 
+## Configuration
+
+All classifier thresholds and codec fingerprints are defined in `src/main/resources/classifier.properties`, which is bundled inside the JAR and serves as the single source of defaults. No values are hardcoded — if you want to tune behaviour, override any subset of properties in a file outside the JAR.
+
+### Override locations
+
+The tool looks for an override file at the following paths in order, and uses the first one found:
+
+1. `~/.config/flac-classifier/config.properties` — user-level overrides
+2. `./flac-classifier.properties` — working-directory overrides
+
+Only the properties you want to change need to appear in your override file; everything else falls back to the bundled defaults.
+
+### Available properties
+
+| Property | Default | Description |
+|---|---|---|
+| `spectral.cutoffThresholdDb` | `-60.0` | Noise-floor threshold (dB re. peak) for detecting a frequency cutoff |
+| `spectral.slopeBrickWallDb` | `-40.0` | Slope below which a rolloff is classified as brick-wall (MP3-like) |
+| `spectral.slopeGradualDb` | `-15.0` | Slope below which a rolloff is classified as gradual (AAC-like) |
+| `spectral.above22kRatioThreshold` | `0.001` | Minimum power ratio above 22 kHz to count as genuine hi-res content |
+| `bitdepth.maxSampleCount` | `500000` | Maximum samples analysed for bit-depth detection (performance knob) |
+| `bitdepth.zeroPaddingThreshold` | `0.99` | LSB zero-fraction above which a 24-bit file is flagged as zero-padded |
+| `bitdepth.lsbEntropyThreshold` | `4.0` | Minimum LSB Shannon entropy (bits) to classify a file as genuine 24-bit |
+| `classification.effectiveDepthThreshold` | `20` | Minimum effective bit depth to classify a file as true hi-res |
+| `classification.fullBandwidthCutoffHz` | `20000.0` | Frequency boundary between "lossy" and "full bandwidth" |
+| `classification.mp3CutoffRanges` | `15500-16500;18500-19500;19500-21000` | MP3 encoder cutoff fingerprints (Hz), semicolon-separated `low-high` ranges |
+| `classification.mp3BitrateLabels` | `~128 kbps;~192 kbps;~256-320 kbps` | Labels for each MP3 range (semicolon-separated, same order) |
+| `classification.aacCutoffRanges` | `14900-16500;17800-19400` | AAC encoder cutoff fingerprints (Hz), semicolon-separated `low-high` ranges |
+| `classification.aacBitrateLabels` | `~128 kbps;~192 kbps` | Labels for each AAC range (semicolon-separated, same order) |
+
+### Library usage with a custom config
+
+When using flac-classifier as a library you can construct and pass a `ClassifierConfig` directly, bypassing the properties file entirely:
+
+```kotlin
+val config = ClassifierConfig.load()                  // reads bundled defaults + user file
+val result = FlacClassifier.analyze(File("track.flac"), config)
+```
+
 ## Building
 
 ```bash
@@ -151,10 +191,14 @@ src/main/kotlin/dev/niessen/flacclassifier/
 ├── SpectralAnalyzer.kt      FFT pipeline - cutoff frequency + rolloff shape
 ├── BitDepthAnalyzer.kt      LSB entropy - effective bit depth
 ├── ClassificationEngine.kt  Heuristic decision tree → Classification
+├── ClassifierConfig.kt      Configuration loader (reads classifier.properties)
 ├── Main.kt                  CLI entry point (picocli)
 └── model/
     ├── Classification.kt    Sealed class with 8 subtypes
     └── AnalysisResult.kt    Output data class
+
+src/main/resources/
+└── classifier.properties    Bundled defaults for all thresholds and fingerprints
 ```
 
 ## Releasing
