@@ -15,4 +15,4 @@ data class AnalysisResult(
     val confidenceNotes: List<String>
 )
 
-enum class RolloffShape { BRICK_WALL, GRADUAL, PSYCHOACOUSTIC, NONE, UNKNOWN }
+enum class RolloffShape { BRICK_WALL, GRADUAL, PSYCHOACOUSTIC, UNKNOWN }

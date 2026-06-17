@@ -103,11 +103,14 @@ slope = averageDb(bins above cutoff) − averageDb(bins below cutoff)
 
 A more negative slope = a steeper cutoff.
 
-| Slope | `RolloffShape` | What it indicates |
-|-------|---------------|-------------------|
-| `< −40 dB` | `BRICK_WALL` | Hard low-pass filter - characteristic of MP3 encoding |
-| `−40 dB … −15 dB` | `GRADUAL` | Moderate rolloff - characteristic of AAC encoding |
-| `> −15 dB` | `PSYCHOACOUSTIC` | Very gentle fade - characteristic of Ogg Vorbis, or genuinely full-bandwidth audio |
+| Slope | Energy cliff (ref band − near-cutoff, dB) | `RolloffShape` | What it indicates |
+|-------|------------------------------------------|---------------|-------------------|
+| `< −40 dB` | any | `BRICK_WALL` | Hard low-pass filter - characteristic of MP3 encoding |
+| `−40 dB … −15 dB` | any | `GRADUAL` | Moderate rolloff - characteristic of AAC encoding |
+| `> −15 dB` | `≥ 30 dB` (configurable) | `PSYCHOACOUSTIC` | Very gentle fade with a large energy cliff below the cutoff - characteristic of Ogg Vorbis encoding |
+| `> −15 dB` | `< 30 dB` | `UNKNOWN` | Very gentle slope with no significant energy cliff - natural HF attenuation, not a codec-induced cutoff |
+
+The distinction between `PSYCHOACOUSTIC` and `UNKNOWN` is controlled by `spectral.psychoacousticEnergyCliffDb` (default 30 dB). The cliff is measured as the average level of a reference band 2–4 kHz below the cutoff minus the average level of the window immediately before the cutoff. A codec boundary (e.g. Ogg Vorbis) leaves active content in the reference band while the psychoacoustic model attenuates the near-cutoff region — a large positive cliff. Natural HF attenuation declines gradually across that whole band, producing only a small cliff. When audio simply lacks high-frequency content (a common property of acoustic recordings, vinyl rips, and most real-world music), the cliff is below the threshold and the rolloff is reported as `UNKNOWN`.
 
 ### Above-22 kHz detection (hi-res files only)
 
@@ -191,6 +194,7 @@ The classification engine applies a deterministic decision tree to the outputs o
 
 5. Rolloff == PSYCHOACOUSTIC AND cutoff < 20 000 Hz
    → OGG_TRANSCODE
+   (UNKNOWN rolloff falls through - see rolloff classification above)
 
 6. cutoff ≥ 20 000 Hz (full bandwidth):
    SR > 44100 AND hasContentAbove22kHz AND effectiveBitDepth ≥ 20 → TRUE_HIRES
@@ -228,7 +232,7 @@ AAC encoders use psychoacoustic modelling to remove high-frequency content, prod
 
 - **VBR MP3**: Variable-bitrate MP3 uses different cutoff frequencies in different sections of the file. The averaged spectrum reflects the highest bitrate used (loudest passages), which is generally the correct behaviour.
 - **High-bitrate AAC (256 kbps+)**: Apple AAC at 256 kbps and similar high-quality encoders preserve content to near-Nyquist and are not reliably detected as lossy.
-- **Vinyl and cassette rips**: Analogue sources naturally roll off before 20 kHz and may be incorrectly classified as `OGG_TRANSCODE` or `LOSSY_UNKNOWN`. The confidence notes will include the measured cutoff frequency, which an operator can use to override the verdict.
+- **Vinyl and cassette rips**: Analogue sources naturally roll off before 20 kHz. The energy cliff gate on the `PSYCHOACOUSTIC` shape (`spectral.psychoacousticEnergyCliffDb`) substantially reduces false `OGG_TRANSCODE` results for these files — when the HF region is already near the noise floor, the cliff is small and the rolloff shape is reported as `UNKNOWN`, causing the file to fall through to `UNCERTAIN`. Files that still produce a false positive can be tuned by raising `spectral.psychoacousticEnergyCliffDb` to a higher value (e.g. 35).
 - **Very short files**: Files shorter than one FFT frame (~93 ms at 44.1 kHz) return `UNCERTAIN`.
 
 ---

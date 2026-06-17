@@ -149,12 +149,14 @@ Only the properties you want to change need to appear in your override file; eve
 | `spectral.cutoffThresholdDb` | `-60.0` | Noise-floor threshold (dB re. peak) for detecting a frequency cutoff |
 | `spectral.slopeBrickWallDb` | `-40.0` | Slope below which a rolloff is classified as brick-wall (MP3-like) |
 | `spectral.slopeGradualDb` | `-15.0` | Slope below which a rolloff is classified as gradual (AAC-like) |
+| `spectral.psychoacousticEnergyCliffDb` | `30.0` | Minimum energy cliff (dB) between the 2–4 kHz reference band below the cutoff and the near-cutoff window to classify a gentle rolloff as psychoacoustic (codec-induced). A codec boundary leaves active content in the reference band; natural attenuation declines gradually. Lower to catch more Ogg; raise to reduce false positives |
 | `spectral.above22kRatioThreshold` | `0.001` | Minimum power ratio above 22 kHz to count as genuine hi-res content |
 | `bitdepth.maxSampleCount` | `500000` | Maximum samples analysed for bit-depth detection (performance knob) |
 | `bitdepth.zeroPaddingThreshold` | `0.99` | LSB zero-fraction above which a 24-bit file is flagged as zero-padded |
 | `bitdepth.lsbEntropyThreshold` | `4.0` | Minimum LSB Shannon entropy (bits) to classify a file as genuine 24-bit |
 | `classification.effectiveDepthThreshold` | `20` | Minimum effective bit depth to classify a file as true hi-res |
-| `classification.fullBandwidthCutoffHz` | `20000.0` | Frequency boundary between "lossy" and "full bandwidth" |
+| `classification.fullBandwidthCutoffHz` | `20000.0` | Cutoff at or above this frequency (Hz) is treated as full bandwidth; psychoacoustic rolloff below it is flagged as Ogg Vorbis |
+| `classification.naturalAttenuationCutoffHz` | `18000.0` | Lower boundary (Hz) for treating an unidentified (`UNKNOWN`) rolloff as natural attenuation rather than an unresolved codec. Files whose cutoff is below `fullBandwidthCutoffHz` but at or above this threshold — with no codec fingerprint — are classified as `TRUE_CD` / `TRUE_HIRES` |
 | `classification.mp3CutoffRanges` | `15500-16500;18500-19500;19500-21000` | MP3 encoder cutoff fingerprints (Hz), semicolon-separated `low-high` ranges |
 | `classification.mp3BitrateLabels` | `~128 kbps;~192 kbps;~256-320 kbps` | Labels for each MP3 range (semicolon-separated, same order) |
 | `classification.aacCutoffRanges` | `14900-16500;17800-19400` | AAC encoder cutoff fingerprints (Hz), semicolon-separated `low-high` ranges |
@@ -171,10 +173,24 @@ val result = FlacClassifier.analyze(File("track.flac"), config)
 
 ## Building
 
+A `Makefile` wraps the common Gradle commands:
+
 ```bash
-./gradlew test          # run unit tests
-./gradlew shadowJar     # build CLI fat JAR  → build/libs/*-all.jar
-./gradlew jar           # build library JAR  → build/libs/*.jar (no -all suffix)
+make            # build the fat CLI JAR (default)
+make test       # run unit tests
+make clean      # remove build artefacts
+make install    # publish library JAR to ~/.m2
+make run FILE=/path/to/track.flac             # build (if needed) then analyse
+make run FILE=/path/to/track.flac OPTS=--json # same with JSON output
+make help       # list all targets
+```
+
+Raw Gradle equivalents:
+
+```bash
+./gradlew test                 # run unit tests
+./gradlew shadowJar            # build CLI fat JAR  → build/libs/*-all.jar
+./gradlew jar                  # build library JAR  → build/libs/*.jar (no -all suffix)
 ./gradlew publishToMavenLocal  # install to ~/.m2 for local use
 ```
 

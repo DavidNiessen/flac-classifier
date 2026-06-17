@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import kotlin.math.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class SpectralAnalyzerTest {
@@ -57,7 +58,7 @@ class SpectralAnalyzerTest {
         assertNotNull(report.cutoffHz)
         assertTrue(report.cutoffHz!! >= 20000.0, "Expected cutoff near Nyquist, got ${report.cutoffHz} Hz")
         assertTrue(
-            report.rolloffShape in setOf(RolloffShape.PSYCHOACOUSTIC, RolloffShape.NONE, RolloffShape.UNKNOWN),
+            report.rolloffShape in setOf(RolloffShape.PSYCHOACOUSTIC, RolloffShape.UNKNOWN),
             "Expected natural rolloff, got ${report.rolloffShape}"
         )
     }
@@ -72,6 +73,26 @@ class SpectralAnalyzerTest {
         val cutoff = report.cutoffHz!!
         assertTrue(cutoff in 14000.0..18000.0, "Expected cutoff ~16kHz, got $cutoff Hz")
         assertEquals(RolloffShape.BRICK_WALL, report.rolloffShape, "Expected BRICK_WALL, got ${report.rolloffShape}")
+    }
+
+    @Test
+    fun `natural 1 over f squared rolloff is not classified as PSYCHOACOUSTIC`() {
+        // Amplitude falls off as 1/f²: the spectrum is already well-attenuated in the
+        // 2–4 kHz reference band below the detected cutoff, so the energy cliff is small.
+        // Such files must not be mistaken for Ogg Vorbis transcodes.
+        val samples = FloatArray(numSamples) { 0f }
+        for (freq in 200..18000 step 300) {
+            val fNorm = freq / 1000.0
+            val amplitude = (1.0 / (fNorm * fNorm)).toFloat() * 0.5f
+            for (i in samples.indices) {
+                samples[i] += (sin(2.0 * PI * freq * i / sampleRate) * amplitude).toFloat()
+            }
+        }
+        val report = SpectralAnalyzer.analyze(samples, sampleRate)
+        assertNotEquals(
+            RolloffShape.PSYCHOACOUSTIC, report.rolloffShape,
+            "Natural 1/f² attenuation should not be PSYCHOACOUSTIC (was ${report.rolloffShape})"
+        )
     }
 
     @Test

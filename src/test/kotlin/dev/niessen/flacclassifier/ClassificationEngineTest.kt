@@ -106,6 +106,27 @@ class ClassificationEngineTest {
     }
 
     @Test
+    fun `natural attenuation - UNKNOWN rolloff below natural-attenuation threshold stays UNCERTAIN`() {
+        val (c, _) = ClassificationEngine.classify(
+            info(),
+            spectral(cutoffHz = 17000.0, shape = RolloffShape.UNKNOWN),
+            bitDepth()
+        )
+        assertIs<Classification.Uncertain>(c)
+    }
+
+    @Test
+    fun `natural attenuation - UNKNOWN rolloff near Nyquist is TRUE_CD not Ogg`() {
+        val (c, notes) = ClassificationEngine.classify(
+            info(),
+            spectral(cutoffHz = 19700.0, shape = RolloffShape.UNKNOWN),
+            bitDepth()
+        )
+        assertIs<Classification.TrueCdQuality>(c)
+        assert(notes.any { it.contains("natural rolloff") }) { "Expected natural-rolloff note, got: $notes" }
+    }
+
+    @Test
     fun `lossy unknown - brick wall at unrecognised frequency`() {
         val (c, _) = ClassificationEngine.classify(
             info(),

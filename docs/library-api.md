@@ -103,7 +103,7 @@ Then in the consuming project, add `mavenLocal()` as the first repository:
 
 ## Public API
 
-The library exposes a single entry point: `FlacClassifier`.
+The library exposes two entry points: `FlacClassifier` for analysis and `ClassifierConfig` for optional tuning.
 
 ### Analysing a file
 
@@ -127,6 +127,28 @@ val result = FlacClassifier.analyze(inputStream, "track.flac")
 // Without a name (filePath will be "<stream>")
 val result = FlacClassifier.analyze(inputStream)
 ```
+
+### Using a custom configuration
+
+By default, `FlacClassifier.analyze` loads its configuration from `~/.config/flac-classifier/config.properties` (or `./flac-classifier.properties`) and falls back to the bundled defaults. You can bypass this and pass a `ClassifierConfig` directly — useful in server environments where configuration is managed programmatically rather than via files on disk.
+
+```kotlin
+import dev.niessen.flacclassifier.ClassifierConfig
+import dev.niessen.flacclassifier.FlacClassifier
+
+// Load from the standard locations (same as the default behaviour)
+val config = ClassifierConfig.load()
+val result = FlacClassifier.analyze(File("track.flac"), config)
+
+// Construct a config entirely in code (no file I/O)
+val config = ClassifierConfig.load().copy(
+    psychoacousticEnergyCliffDb = 35.0f,  // stricter Ogg detection (fewer false positives)
+    lsbEntropyThreshold = 3.5             // looser 24-bit gate
+)
+val result = FlacClassifier.analyze(inputStream, "track.flac", config)
+```
+
+`ClassifierConfig` is a Kotlin data class, so `copy()` is available for targeted overrides without reconstructing the whole object.
 
 **Important:** The stream is fully consumed and decoded into memory before analysis begins. For a typical 5-minute stereo 24-bit/96 kHz file this requires approximately 220 MB of heap. Ensure your Spring Boot application has sufficient heap configured (`-Xmx512m` or higher for large files).
 

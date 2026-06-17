@@ -57,7 +57,7 @@ object SpectralAnalyzer {
         val cutoffBin = findCutoffBin(smoothed, config.cutoffThresholdDb)
         val cutoffHz = if (cutoffBin >= 0) binToHz(cutoffBin, sampleRate) else null
         val rolloffShape = if (cutoffBin > SLOPE_WINDOW_BINS && cutoffBin < numBins - SLOPE_WINDOW_BINS) {
-            classifyRolloff(powerDb, cutoffBin, numBins, config)
+            classifyRolloff(powerDb, cutoffBin, numBins, sampleRate, config)
         } else RolloffShape.UNKNOWN
 
         val hasContentAbove22kHz = if (sampleRate > 44100) {
@@ -86,7 +86,7 @@ object SpectralAnalyzer {
         return -1
     }
 
-    private fun classifyRolloff(powerDb: FloatArray, cutoffBin: Int, numBins: Int, config: ClassifierConfig): RolloffShape {
+    private fun classifyRolloff(powerDb: FloatArray, cutoffBin: Int, numBins: Int, sampleRate: Int, config: ClassifierConfig): RolloffShape {
         val belowStart = maxOf(0, cutoffBin - SLOPE_WINDOW_BINS)
         val aboveEnd = minOf(numBins - 1, cutoffBin + SLOPE_WINDOW_BINS)
 
@@ -94,10 +94,21 @@ object SpectralAnalyzer {
         val aboveDb = powerDb.slice((cutoffBin + 1)..aboveEnd).average().toFloat()
         val slope = aboveDb - belowDb
 
+        // Codec-induced cutoffs (Ogg Vorbis) have active content 2–4 kHz below the cutoff
+        // that drops sharply at the codec boundary. Natural attenuation has a gradual decline
+        // across that whole band, producing a much smaller cliff.
+        val refNearBins = hzToBin(2000.0, sampleRate)
+        val refFarBins = hzToBin(4000.0, sampleRate)
+        val refLow = maxOf(0, cutoffBin - refFarBins)
+        val refHigh = maxOf(0, cutoffBin - refNearBins)
+        val refDb = if (refLow < refHigh) powerDb.slice(refLow until refHigh).average().toFloat() else belowDb
+        val energyCliff = refDb - belowDb
+
         return when {
             slope < config.slopeBrickWallDb -> RolloffShape.BRICK_WALL
             slope < config.slopeGradualDb -> RolloffShape.GRADUAL
-            else -> RolloffShape.PSYCHOACOUSTIC
+            energyCliff >= config.psychoacousticEnergyCliffDb -> RolloffShape.PSYCHOACOUSTIC
+            else -> RolloffShape.UNKNOWN
         }
     }
 

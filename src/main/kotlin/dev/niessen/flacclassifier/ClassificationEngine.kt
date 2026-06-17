@@ -60,8 +60,14 @@ object ClassificationEngine {
             return Classification.OggTranscode to notes
         }
 
-        // 6. Full-bandwidth determination
-        if (cutoff == null || cutoff >= config.fullBandwidthCutoffHz) {
+        // 6. Full-bandwidth determination.
+        // Unidentified rolloff (UNKNOWN) that reaches near-Nyquist is treated as natural
+        // attenuation rather than a missed codec: no fingerprint was found, and the content
+        // is too close to Nyquist to be a credible lossy cutoff.
+        val isFullBandwidth = cutoff == null || cutoff >= config.fullBandwidthCutoffHz
+        val isNearNyquistNatural = shape == RolloffShape.UNKNOWN &&
+                cutoff != null && cutoff >= config.naturalAttenuationCutoffHz
+        if (isFullBandwidth || isNearNyquistNatural) {
             if (info.sampleRate > 44100) {
                 if (spectral.hasContentAbove22kHz == true) {
                     return if (bitDepth.effectiveBitDepth >= config.effectiveDepthThreshold) {
@@ -76,15 +82,19 @@ object ClassificationEngine {
             if (info.sampleRate == 44100) {
                 return when {
                     info.bitsPerSample == 16 -> {
-                        notes.add("Full spectrum to Nyquist, genuine 16-bit")
+                        if (isNearNyquistNatural)
+                            notes.add("Cutoff at ${"%.0f".format(cutoff!!)} Hz with natural rolloff; no codec fingerprint found")
+                        else
+                            notes.add("Full spectrum to Nyquist, genuine 16-bit")
                         Classification.TrueCdQuality to notes
                     }
                     info.bitsPerSample == 24 && bitDepth.effectiveBitDepth >= config.effectiveDepthThreshold -> {
+                        if (isNearNyquistNatural)
+                            notes.add("Cutoff at ${"%.0f".format(cutoff!!)} Hz with natural rolloff; no codec fingerprint found")
                         notes.add("Genuine 24-bit at 44.1 kHz (high-res master)")
                         Classification.TrueHiRes to notes
                     }
                     info.bitsPerSample == 24 && isShallowBitDepth -> {
-                        // Padded 16-bit in a 24-bit container at 44.1kHz - CD quality with warning
                         notes.add("24-bit container but 16-bit effective depth; CD quality content")
                         Classification.TrueCdQuality to notes
                     }
